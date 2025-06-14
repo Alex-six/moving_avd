@@ -7,41 +7,60 @@ module tb_moving_average;
     reg data_refresh;
     reg [15:0] din;
     reg [2:0] mode;
+    reg output_refresh_mode;
     wire [15:0] dout;
+    wire output_pulse;
 
-    // 实例化被测模块
-    moving_average uut (
+    // Instantiate DUT (moving_average_v5)
+    moving_average_v5 uut (
         .clk(clk),
         .rst_n(rst_n),
         .enable(enable),
         .data_refresh(data_refresh),
+        .output_refresh_mode(output_refresh_mode),
         .din(din),
         .mode(mode),
-        .dout(dout)
+        .dout(dout),
+        .output_pulse(output_pulse)
     );
 
-    // 时钟生成
+    // Clock generation
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // 测试激励
+    // Test stimulus
     initial begin
-        // 初始化
+        // Initialize signals
         rst_n = 0;
         enable = 0;
         data_refresh = 0;
+        output_refresh_mode = 0;
         din = 0;
         mode = 0;
         #20;
 
-        // 释放复位
+        // Release reset
         rst_n = 1;
         enable = 1;
         #10;
 
-        // 测试模式0:无平均
+        // Test output_refresh_mode = 1 (output every calculation)
+        output_refresh_mode = 1;
+        mode = 3'b000;
+        for (int i=1; i<=3; i++) begin
+            din = i;
+            data_refresh = 1;
+            #10;
+            data_refresh = 0;
+            #10;
+            $display("Refresh Mode 1: din=%d, dout=%d, pulse=%b", din, dout, output_pulse);
+        end
+        output_refresh_mode = 0;
+        #20;
+
+        // Test mode 0: no averaging
         mode = 3'b000;
         for (int i=1; i<=5; i++) begin
             din = i;
@@ -52,7 +71,7 @@ module tb_moving_average;
             $display("Mode 0: din=%d, dout=%d", din, dout);
         end
 
-        // 测试模式1:2次平均
+        // Test mode 1: 2-point average
         mode = 3'b001;
         for (int i=1; i<=5; i++) begin
             din = i;
@@ -63,7 +82,7 @@ module tb_moving_average;
             $display("Mode 1: din=%d, dout=%d", din, dout);
         end
 
-        // 测试模式2:加权平均(25%+25%+50%)
+        // Test mode 2: weighted average (25%+25%+50%)
         mode = 3'b010;
         for (int i=1; i<=5; i++) begin
             din = i;
@@ -74,7 +93,7 @@ module tb_moving_average;
             $display("Mode 2: din=%d, dout=%d", din, dout);
         end
 
-        // 测试模式3:4次平均
+        // Test mode 3: 4-point average
         mode = 3'b011;
         for (int i=1; i<=10; i++) begin
             din = i;
@@ -85,7 +104,7 @@ module tb_moving_average;
             $display("Mode 3: din=%d, dout=%d", din, dout);
         end
 
-        // 测试模式4/5:16次平均
+        // Test mode 4: 16-point average
         mode = 3'b100;
         for (int i=1; i<=20; i++) begin
             din = i;
@@ -98,7 +117,7 @@ module tb_moving_average;
             end
         end
 
-        // 测试使能控制
+        // Test enable control
         enable = 0;
         din = 100;
         data_refresh = 1;
@@ -108,7 +127,7 @@ module tb_moving_average;
         $finish;
     end
 
-    // 波形记录
+    // Waveform recording
     initial begin
         $dumpfile("wave.vcd");
         $dumpvars(0, tb_moving_average);
