@@ -73,7 +73,7 @@ always @(posedge clk or negedge rst_n) begin
             case (mode)
                 3'b000: dout <= din;         // No averaging
                 3'b001: dout <= ($signed(prev_din) + $signed(din)) >>> 1;  // 2-point average (signed shift)
-                3'b010: dout <= ($signed(prev_prev_din) + $signed(prev_din) + $signed({din,1'b0}) >>> 2; // Weighted average (25%+25%+50%)(signed shift)
+                3'b010: dout <= ($signed(prev_prev_din) + $signed(prev_din) + $signed({din,1'b0})) >>> 2; // Weighted average (25%+25%+50%)(signed shift)
                 3'b011: dout <= ($signed(prev_prev_din) + $signed(prev_din) + $signed(din) + $signed(sum[19:4])) >>> 2;  // 4-point average (signed shift)
                 3'b100: dout <= sum[19:4];   // 16-point average
                 3'b101: dout <= sum[19:4];   // 16-point average

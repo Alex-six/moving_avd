@@ -18,6 +18,8 @@ reg signed [15:0] init_din; // Initial din value
 reg [3:0] cnt;           // Data counter
 reg [15:0] history [0:15]; // 16-level history data register
 reg init_flag;           // Initialization flag
+reg [15:0] prev_din;     // Previous input value
+reg [15:0] prev_prev_din; // Second previous input value
 
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -29,10 +31,15 @@ always @(posedge clk or negedge rst_n) begin
         init_flag <= 1'b0;
         dout <= 16'b0;
         output_pulse <= 1'b0;
+        prev_din <= 16'b0;
+        prev_prev_din <= 16'b0;
     end else if (enable) begin
         // Only work when enabled
         if (data_refresh) begin
             // Update history data
+            prev_prev_din <= prev_din;
+            prev_din <= din;
+            
             for (integer i=15; i>0; i=i-1) begin
                 history[i] <= history[i-1];
             end
