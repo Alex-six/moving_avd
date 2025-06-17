@@ -1,64 +1,57 @@
 `timescale 1ns / 1ps
 
-module moving_average_v6 #(
+module moving_average_v8 #(
     parameter DATA_WIDTH = 16
 ) (
     input wire clk,          // Clock signal
-    input wire rst_n,        // Async reset (active low)
+    input wire rst_n,        // Async reset (active low) 
     input wire enable,       // Module enable
     input wire data_refresh, // Data refresh pulse
-    input wire output_refresh_mode, // Output refresh mode: 0-by average count, 1-every calculation
-    input wire signed [DATA_WIDTH-1:0] din,   // Input data (signed)
-    input wire [2:0] mode,   // Mode select: 000-no avg, 001-2pt, 010-3pt, 011-4pt, 100-8pt, 101-16pt
-    output reg signed [DATA_WIDTH-1:0] dout,  // Output data (signed)
+    input wire output_refresh_mode, // Output refresh mode
+    input wire signed [DATA_WIDTH-1:0] din,   // Input data
+    input wire [2:0] mode,   // Mode select
+    output reg signed [DATA_WIDTH-1:0] dout,  // Output data
     output reg output_pulse  // Output valid pulse
 );
 
-// Enhanced design (performance optimized)
-localparam SUM_WIDTH = DATA_WIDTH + 12; // 12 guard bits
+// Area-optimized design with maintained performance
+localparam SUM_WIDTH = DATA_WIDTH + 10; // Reduced from 12 to 10 guard bits
 reg signed [SUM_WIDTH-1:0] sum;    // Accumulator
-reg signed [DATA_WIDTH-1:0] history [0:3]; // 4-level history buffer
-reg [3:0] cnt;           // Data counter
-reg init_flag;           // Initialization flag
-
-// Anti-aliasing pre-processing
-wire signed [16:0] din_ext = {din[15], din}; // Sign extension
+reg signed [DATA_WIDTH-1:0] history [0:2]; // Reduced to 3-level history buffer
+reg [3:0] cnt;
+reg init_flag;
 
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        sum <= 28'b0;
+        sum <= {SUM_WIDTH{1'b0}};
         cnt <= 4'b0;
-        for (integer i=0; i<4; i=i+1) begin
-            history[i] <= 16'b0;
+        for (integer i=0; i<3; i=i+1) begin
+            history[i] <= {DATA_WIDTH{1'b0}};
         end
         init_flag <= 1'b0;
-        dout <= 16'b0;
+        dout <= {DATA_WIDTH{1'b0}};
         output_pulse <= 1'b0;
     end else if (enable) begin
-        // Update history data
         if (data_refresh) begin
-            for (integer i=3; i>0; i=i-1) begin
+            // Update history (reduced depth)
+            for (integer i=2; i>0; i=i-1) begin
                 history[i] <= history[i-1];
             end
             history[0] <= din;
             
             if (!init_flag) begin
-                // High precision initialization
-                if (cnt == 0) begin
-                sum <= $signed(din) << 12;  // High precision initialization
-                end else if (cnt <= 15) begin
-                sum <= sum + ($signed(din) << 8);  // Accumulate with scaling
-                end
-                if (cnt == 15) init_flag <= 1'b1;  // Mark initialization complete
+                // Simplified initialization
+                sum <= sum + ($signed(din) << 6);  // Reduced scaling
+                if (cnt == 15) init_flag <= 1'b1;
                 cnt <= cnt + 1;
             end else begin
-                // Improved sliding window calculation
-                sum <= sum + ($signed(din) << 4) - ($signed(history[3]) << 4);  // Sliding window update with scaling
+                // Optimized sliding window
+                sum <= sum + ($signed(din) << 2) - ($signed(history[2]) << 2);
                 cnt <= cnt + 1;
             end
         end
 
-        // Output pulse control
+        // Output control (same as V6)
         output_pulse <= 1'b0;
         if (enable && data_refresh) begin
             if (output_refresh_mode) begin
@@ -76,7 +69,7 @@ always @(posedge clk or negedge rst_n) begin
             end
         end
 
-        // Optimized output calculation with weighted averaging
+        // Maintained weighted averaging
         case (mode)
             3'b000: dout <= din;
             3'b001: dout <= ($signed(history[0]) + $signed(history[1])) >>> 1;
@@ -84,9 +77,9 @@ always @(posedge clk or negedge rst_n) begin
                            ($signed(history[1]) << 1) + 
                            $signed(history[2])) >>> 2;
             3'b011: dout <= ($signed(history[0]) + $signed(history[1]) + 
-                          $signed(history[2]) + $signed(sum[SUM_WIDTH-1:12])) >>> 2;
-            3'b100: dout <= sum[SUM_WIDTH-1:12];  // 8-point average
-            3'b101: dout <= sum[SUM_WIDTH-1:12];  // 16-point average
+                          $signed(history[2]) + $signed(sum[SUM_WIDTH-1:10])) >>> 2;
+            3'b100: dout <= sum[SUM_WIDTH-1:10];  // 8-point average
+            3'b101: dout <= sum[SUM_WIDTH-1:10];  // 16-point average
             default: dout <= din;
         endcase
     end

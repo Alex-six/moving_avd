@@ -1,34 +1,37 @@
 `timescale 1ns / 1ps
 
-module moving_average_v4 (
+module moving_average_v7 #(
+    parameter DATA_WIDTH = 16
+) (
     input wire clk,          // Clock signal
     input wire rst_n,        // Async reset (active low)
     input wire enable,       // Module enable
     input wire data_refresh, // Data refresh pulse
     input wire output_refresh_mode, // Output refresh mode: 0-by average count, 1-every calculation
-    input wire signed [15:0] din,   // Input data (signed)
+    input wire signed [DATA_WIDTH-1:0] din,   // Input data (signed)
     input wire [2:0] mode,   // Mode select: 000-no avg, 001-2pt, 010-3pt, 011-4pt, 100-8pt, 101-16pt
-    output reg signed [15:0] dout,  // Output data (signed)
+    output reg signed [DATA_WIDTH-1:0] dout,  // Output data (signed)
     output reg output_pulse  // Output valid pulse
 );
 
 // Optimized design (improved ADC performance)
-reg signed [23:0] sum;    // Extended accumulator width (8-bit for overflow and precision)
-reg signed [15:0] init_din; // Initial din value
+localparam SUM_WIDTH = DATA_WIDTH + 8; // 8-bit for overflow and precision
+reg signed [SUM_WIDTH-1:0] sum;    // Extended accumulator width
+reg signed [DATA_WIDTH-1:0] init_din; // Initial din value
 reg [3:0] cnt;           // Data counter
-reg [15:0] prev_din;     // Previous input data
-reg [15:0] prev_prev_din; // Second previous input data
+reg signed [DATA_WIDTH-1:0] prev_din;     // Previous input data
+reg signed [DATA_WIDTH-1:0] prev_prev_din; // Second previous input data
 reg init_flag;           // Initialization flag
 
 // Remove multipliers, use only add/sub operations
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        sum <= 24'b0;
+        sum <= {SUM_WIDTH{1'b0}};
         cnt <= 4'b0;
-        prev_din <= 16'b0;
-        prev_prev_din <= 16'b0;
+        prev_din <= {DATA_WIDTH{1'b0}};
+        prev_prev_din <= {DATA_WIDTH{1'b0}};
         init_flag <= 1'b0;
-        dout <= 16'b0;
+        dout <= {DATA_WIDTH{1'b0}};
         output_pulse <= 1'b0;
     end else if (enable) begin
         // Only work when enabled
@@ -51,7 +54,8 @@ always @(posedge clk or negedge rst_n) begin
                 cnt <= cnt + 1;
             end else begin
                 // Improved sliding window calculation
-                sum <= sum + ($signed(din) << 4) - ($signed(sum[23:4]) << 4);  // Maintain high precision
+                sum <= sum + ($signed(din) << 4) - ($signed(sum[SUM_WIDTH-1:4]) << 4);  // Maintain high precision
+                cnt <= cnt + 1;
             end
         end
         
@@ -82,9 +86,9 @@ always @(posedge clk or negedge rst_n) begin
                                ($signed(prev_din) >>> 2) +       // 25% weight
                                ($signed(din) >>> 1));            // 50% weight
                 3'b011: dout <= ($signed(prev_prev_din) + $signed(prev_din) + 
-                               $signed(din) + $signed(sum[23:4])) >>> 2;
-                3'b100: dout <= sum[23:8];   // 16-point average (higher precision)
-                3'b101: dout <= sum[23:8];   // 16-point average
+                               $signed(din) + $signed(sum[SUM_WIDTH-1:4])) >>> 2;
+                3'b100: dout <= sum[SUM_WIDTH-1:8];   // 16-point average (higher precision)
+                3'b101: dout <= sum[SUM_WIDTH-1:8];   // 16-point average
                 default: dout <= din;
             endcase
         end
